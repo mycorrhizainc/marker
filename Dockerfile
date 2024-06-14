@@ -67,7 +67,7 @@ RUN pip install opencv-python-headless
 RUN pip install --no-cache-dir --no-warn-script-location  pika
 
 
-COPY ./main.py .
+COPY . .
 
 # The command to run the application
 CMD ["poetry", "run", "server.py"]
