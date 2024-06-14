@@ -8,14 +8,6 @@ WORKDIR /app
 
 
 
-
-COPY ./scripts/ .
-
-# Install system requirements
-# Note: Scripted installation of tesseract and ghostscript may need adjustments
-RUN apt-get update && \
-	apt-get install -y $(cat scripts/install/apt-requirements.txt)
-
 # Install Tesseract
 RUN apt-get update && \
 	apt-get install -y lsb-release apt-transport-https wget && \
@@ -40,6 +32,14 @@ RUN wget https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download
 # Find the tessdata directory and create a local.env file with the TESSDATA_PREFIX
 RUN tessdata_path=$(find / -name tessdata -print -quit) && \
 	echo "TESSDATA_PREFIX=${tessdata_path}" > local.env
+
+COPY ./scripts/ .
+
+# Install system requirements
+# Note: Scripted installation of tesseract and ghostscript may need adjustments
+RUN apt-get update && \
+	apt-get install -y $(cat scripts/install/apt-requirements.txt)
+
 
 
 COPY ./pyproject.toml . 
@@ -70,4 +70,4 @@ RUN pip install --no-cache-dir --no-warn-script-location  pika
 COPY . .
 
 # The command to run the application
-CMD ["poetry", "run", "server.py"]
+# CMD ["poetry", "run", "server.py" , "-port", "2718"]

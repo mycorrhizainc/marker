@@ -200,12 +200,12 @@ class PDFProcessor(Controller):
         result = process_pdfs_core(in_folder, out_folder, chunk_idx, num_chunks, max_pdfs, min_length, metadata_file)
         return result
 
-def start_server():
+def start_server(port : int):
     app = Litestar(
         route_handlers = [PDFProcessor]
     )
 
-    run_config = uvicorn.Config(app, port=2718, host="0.0.0.0")
+    run_config = uvicorn.Config(app, port=port, host="0.0.0.0")
     server = uvicorn.Server(run_config)
 
     init_models_and_workers(workers=5)  # Initialize models and workers with a default worker count of 5
@@ -223,6 +223,8 @@ def shutdown():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run a server to process pdfs")
+    parser.add_argument("port", help="Port for the server to run on.")
     start_server()
 
 
