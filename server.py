@@ -201,6 +201,8 @@ class PDFProcessor(Controller):
         return result
 
 def start_server(port : int):
+    if not isinstance(port,int):
+        port = 2718
     app = Litestar(
         route_handlers = [PDFProcessor]
     )
@@ -225,7 +227,9 @@ def shutdown():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run a server to process pdfs")
     parser.add_argument("port", help="Port for the server to run on.")
-    start_server()
+    args = parser.parse_args()
+    port =args.port
+    start_server(port)
 
 
 
