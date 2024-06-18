@@ -245,7 +245,7 @@ class PDFProcessor(Controller):
         print("This a test message")
         def download_file(url: str, savedir: Path) -> Path:
             # TODO: Use a temporary directory for downloads or archive it in some other way.
-            local_filename = savedir
+            local_filename = savedir / Path(rand_string())
             # NOTE the stream=True parameter below
             with requests.get(url, stream=True) as r:
                 r.raise_for_status()
