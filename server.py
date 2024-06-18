@@ -19,6 +19,7 @@ from pathlib import Path
 
 import multiprocessing as mp
 
+mp.set_start_method('spawn')
 os.environ["IN_STREAMLIT"] = "true"  # Avoid multiprocessing inside surya
 os.environ["PDFTEXT_CPU_WORKERS"] = "1"  # Avoid multiprocessing inside pdftext
 
@@ -38,24 +39,22 @@ def worker_exit():
     del model_refs
 
 
-def process_single_pdf(args):
-    filepath, out_folder, metadata, min_length = args
-
+def process_single_pdf(filepath : Path, out_folder : Path, metadata : Optional[dict], min_length : Optional[int] ):
+    string_filepath=str(filepath)
     fname = os.path.basename(filepath)
     if markdown_exists(out_folder, fname):
         return
-
     try:
         if min_length:
-            filetype = find_filetype(filepath)
+            filetype = find_filetype(string_filepath)
             if filetype == "other":
                 return 0
 
-            length = get_length_of_text(filepath)
+            length = get_length_of_text(string_filepath)
             if length < min_length:
                 return
 
-        full_text, images, out_metadata = convert_single_pdf(filepath, model_refs, metadata=metadata)
+        full_text, images, out_metadata = convert_single_pdf(string_filepath, model_refs, metadata=metadata)
         if len(full_text.strip()) > 0:
             save_markdown(out_folder, fname, full_text, images, out_metadata)
         else:
@@ -86,7 +85,7 @@ def init_models_and_workers(workers):
         total_processes = int(min(tasks_per_gpu, total_processes))
 
     try:
-        mp.set_start_method('spawn')
+        assert True
     except RuntimeError as e:
         if 'context has already been set' in str(e):
             pass  # Ignore the error if the context has already been set
@@ -94,35 +93,6 @@ def init_models_and_workers(workers):
             raise
     pool = mp.Pool(processes=total_processes, initializer=worker_init, initargs=(model_lst,))
 
-def process_pdfs_core(in_folder, out_folder, chunk_idx, num_chunks, max_pdfs, min_length, metadata_file):
-    in_folder = os.path.abspath(in_folder)
-    out_folder = os.path.abspath(out_folder)
-
-    files = [os.path.join(in_folder, f) for f in os.listdir(in_folder)]
-    files = [f for f in files if os.path.isfile(f)]
-    os.makedirs(out_folder, exist_ok=True)
-
-    chunk_size = math.ceil(len(files) / num_chunks)
-    start_idx = chunk_idx * chunk_size
-    end_idx = start_idx + chunk_size
-    files_to_convert = files[start_idx:end_idx]
-
-    if max_pdfs:
-        files_to_convert = files_to_convert[:max_pdfs]
-
-    metadata = {}
-    if metadata_file:
-        metadata_file_path = os.path.abspath(metadata_file)
-        with open(metadata_file_path, "r") as f:
-            metadata = json.load(f)
-
-    task_args = [(f, out_folder, metadata.get(os.path.basename(f)), min_length) for f in files_to_convert]
-
-    try:
-        list(tqdm(pool.imap(process_single_pdf, task_args), total=len(task_args), desc="Processing PDFs", unit="pdf"))
-        return {"status": "success", "message": f"Processed {len(files_to_convert)} PDFs."}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
 
 def process_pdfs_core_server(in_folder : Path, out_folder : Path , chunk_idx : int , num_chunks : int, max_pdfs : int, min_length : Optional[int] , metadata_file : Optional[Path]):
@@ -149,9 +119,13 @@ def process_pdfs_core_server(in_folder : Path, out_folder : Path , chunk_idx : i
 
     task_args = [(f, out_folder, metadata.get(os.path.basename(f)), min_length) for f in files_to_convert]
     print(f"calling actual function")
+    def process_single_pdf_singlearg(args):
+        filepath, out_folder, metadata, min_length = args
+        return process_single_pdf(filepath,out_folder,metadata,min_length)
+
 
     try:
-        list(tqdm(pool.imap(process_single_pdf, task_args), total=len(task_args), desc="Processing PDFs", unit="pdf"))
+        list(tqdm(pool.imap(process_single_pdf_singlearg, task_args), total=len(task_args), desc="Processing PDFs", unit="pdf"))
         return {"status": "success", "message": f"Processed {len(files_to_convert)} PDFs."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -203,6 +177,15 @@ class PathUpload(BaseModel):
 TMP_DIR = Path("/tmp")
 MARKER_TMP_DIR = TMP_DIR / Path("marker")
 class PDFProcessor(Controller):
+    @post("/test_process_no_pdfs")
+    async def process_pdf_from_file_path(self,data : URLUpload, request: Request ) -> str:
+        print("This a test message")
+        print("This is a test message sent to stderr",sys.stderr)
+        doc_dir = MARKER_TMP_DIR / Path(rand_string())
+        input_directory = doc_dir / Path("in")
+        os.makedirs(input_directory, exist_ok=True)
+        shutil.copy(data.path, input_directory)
+        return await self.process_pdf_from_given_docdir(Path(data.path))
     @post("/process_pdf_from_file_path")
     async def process_pdf_from_file_path(self,data : URLUpload, request: Request ) -> str:
         print("This a test message")
