@@ -14,6 +14,9 @@ from marker.settings import settings
 from marker.logger import configure_logging
 
 
+from typing import Optional
+from pathlib import Path
+
 import multiprocessing as mp
 
 os.environ["IN_STREAMLIT"] = "true"  # Avoid multiprocessing inside surya
@@ -122,6 +125,38 @@ def process_pdfs_core(in_folder, out_folder, chunk_idx, num_chunks, max_pdfs, mi
         return {"status": "error", "message": str(e)}
 
 
+def process_pdfs_core_server(in_folder : Path, out_folder : Path , chunk_idx : int , num_chunks : int, max_pdfs : int, min_length : Optional[int] , metadata_file : Optional[Path]):
+    print(f"called pdf processing core")
+
+    files = [os.path.join(in_folder, f) for f in os.listdir(in_folder)]
+    files = [f for f in files if os.path.isfile(f)]
+    os.makedirs(out_folder, exist_ok=True)
+
+    chunk_size = math.ceil(len(files) / num_chunks)
+    start_idx = chunk_idx * chunk_size
+    end_idx = start_idx + chunk_size
+    files_to_convert = files[start_idx:end_idx]
+    print(f"all variables initialized")
+
+    if max_pdfs:
+        files_to_convert = files_to_convert[:max_pdfs]
+
+    metadata = {}
+    if metadata_file:
+        metadata_file_path = os.path.abspath(metadata_file)
+        with open(metadata_file_path, "r") as f:
+            metadata = json.load(f)
+
+    task_args = [(f, out_folder, metadata.get(os.path.basename(f)), min_length) for f in files_to_convert]
+    print(f"calling actual function")
+
+    try:
+        list(tqdm(pool.imap(process_single_pdf, task_args), total=len(task_args), desc="Processing PDFs", unit="pdf"))
+        return {"status": "success", "message": f"Processed {len(files_to_convert)} PDFs."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 # Server Stuff.
 #
 #
@@ -136,7 +171,7 @@ from pydantic import BaseModel
 
 from typing import Optional
 import signal  # Add this import to handle signal
-from litestar import Litestar, Controller, post  # Importing Litestar
+from litestar import Request, Litestar, Controller, post  # Importing Litestar
 import traceback
 import json
 import uvicorn
@@ -168,7 +203,7 @@ TMP_DIR = Path("/tmp")
 MARKER_TMP_DIR = TMP_DIR / Path("marker")
 class PDFProcessor(Controller):
     @post("/process_pdf_from_file_path")
-    async def process_pdf_from_file_path(self,data : URLUpload ) -> str:
+    async def process_pdf_from_file_path(self,data : URLUpload, request: Request ) -> str:
         print("This a test message")
         print("This is a test message sent to stderr",sys.stderr)
         doc_dir = MARKER_TMP_DIR / Path(rand_string())
@@ -178,6 +213,7 @@ class PDFProcessor(Controller):
         return await self.process_pdf_from_given_docdir(Path(data.path))
 
     async def process_pdf_from_given_docdir(self,doc_dir : Path) -> str:
+        print(f"Called function on {doc_dir}")
         input_directory = doc_dir / Path("in")
         output_directory = doc_dir / Path("out")
         
@@ -185,9 +221,11 @@ class PDFProcessor(Controller):
         os.makedirs(input_directory, exist_ok=True)
 
         os.makedirs(output_directory, exist_ok=True)
-        
+        print("Input and output dirs created")
         # Process the PDF
-        result = process_pdfs_core(input_directory, output_directory, chunk_idx=0, num_chunks=1, max_pdfs=1, min_length=None, metadata_file=None)
+        result = process_pdfs_core_server(input_directory, output_directory, chunk_idx=0, num_chunks=1, max_pdfs=1, min_length=None, metadata_file=None)
+        print(result)
+        assert result.get("status") == "success", str(result)
 
         # Read the output markdown file
         # TODO : Fix at some point with tests
@@ -203,6 +241,7 @@ class PDFProcessor(Controller):
 
     @post("/process_pdf_from_url")
     async def process_pdf_from_url(self,data : URLUpload ) -> str:
+        print("This a test message")
         def download_file(url: str, savedir: Path) -> Path:
             # TODO: Use a temporary directory for downloads or archive it in some other way.
             local_filename = savedir
@@ -217,9 +256,11 @@ class PDFProcessor(Controller):
                         f.write(chunk)
             return local_filename
         doc_dir = MARKER_TMP_DIR / Path(rand_string())
+        print(f"This a test message: {doc_dir}")
 
         input_directory = doc_dir / Path("in")
         os.makedirs(input_directory, exist_ok=True)
+        print(f"This a test message: {input_directory}")
         download_file(data.url,input_directory)
         return await self.process_pdf_from_given_docdir(doc_dir)
         
