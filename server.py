@@ -143,6 +143,9 @@ import uvicorn
 
 import os
 import shutil
+import requests
+import sys
+
 
 class BaseMarkerCliInput(BaseModel):
     in_folder: str
@@ -153,33 +156,35 @@ class BaseMarkerCliInput(BaseModel):
     min_length : Optional[int] = None 
     metadata_file : Optional[str] = None
 
-
-
-
 class PDFUploadFormData(BaseModel):
     file: bytes
+
+class URLUpload(BaseModel):
+    url: str
+class PathUpload(BaseModel):
+    path: str
 
 TMP_DIR = Path("/tmp")
 MARKER_TMP_DIR = TMP_DIR / Path("marker")
 class PDFProcessor(Controller):
-    @post("/process_pdf_upload", media_type="multipart/form-data")
-    async def process_pdf_upload_endpoint(data : PDFUploadFormData ) -> str:
+    @post("/process_pdf_from_file_path")
+    async def process_pdf_from_file_path(self,data : URLUpload ) -> str:
+        print("This a test message")
+        print("This is a test message sent to stderr",sys.stderr)
         doc_dir = MARKER_TMP_DIR / Path(rand_string())
+        input_directory = doc_dir / Path("in")
+        os.makedirs(input_directory, exist_ok=True)
+        shutil.copy(data.path, input_directory)
+        return await self.process_pdf_from_given_docdir(Path(data.path))
 
-        # Parse the uploaded file
-        pdf_binary = data.file
-
+    async def process_pdf_from_given_docdir(self,doc_dir : Path) -> str:
         input_directory = doc_dir / Path("in")
         output_directory = doc_dir / Path("out")
         
         # Ensure the directories exist
         os.makedirs(input_directory, exist_ok=True)
+
         os.makedirs(output_directory, exist_ok=True)
-        
-        # Save the PDF to the output directory
-        pdf_filename = os.path.join(input_directory, pdf_file.filename)
-        with open(pdf_filename, "wb") as f:
-            f.write(pdf_binary.read())
         
         # Process the PDF
         result = process_pdfs_core(input_directory, output_directory, chunk_idx=0, num_chunks=1, max_pdfs=1, min_length=None, metadata_file=None)
@@ -196,8 +201,45 @@ class PDFProcessor(Controller):
         # Return the markdown content as a response
         return markdown_content 
 
+    @post("/process_pdf_from_url")
+    async def process_pdf_from_url(self,data : URLUpload ) -> str:
+        def download_file(url: str, savedir: Path) -> Path:
+            # TODO: Use a temporary directory for downloads or archive it in some other way.
+            local_filename = savedir
+            # NOTE the stream=True parameter below
+            with requests.get(url, stream=True) as r:
+                r.raise_for_status()
+                with open(local_filename, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        # If you have chunk encoded response uncomment if
+                        # and set chunk_size parameter to None.
+                        # if chunk:
+                        f.write(chunk)
+            return local_filename
+        doc_dir = MARKER_TMP_DIR / Path(rand_string())
+
+        input_directory = doc_dir / Path("in")
+        os.makedirs(input_directory, exist_ok=True)
+        download_file(data.url,input_directory)
+        return await self.process_pdf_from_given_docdir(doc_dir)
+        
+    @post("/process_pdf_upload", media_type="multipart/form-data")
+    async def process_pdf_upload_endpoint(self,data : PDFUploadFormData ) -> str:
+        doc_dir = MARKER_TMP_DIR / Path(rand_string())
+        # Parse the uploaded file
+        pdf_binary = data.file
+        input_directory = doc_dir / Path("in")
+        # Ensure the directories exist
+        os.makedirs(input_directory, exist_ok=True)
+        # Save the PDF to the output directory
+        pdf_filename = input_directory / Path(rand_string() + ".pdf")
+        with open(pdf_filename, "wb") as f:
+            f.write(pdf_binary)
+        return await self.process_pdf_from_given_docdir(doc_dir)
+
+
     @post("/process_pdfs_raw_cli")
-    async def process_pdfs_endpoint_raw_cli(data: BaseMarkerCliInput) -> None:
+    async def process_pdfs_endpoint_raw_cli(self,data: BaseMarkerCliInput) -> None:
         in_folder = data.in_folder
         out_folder = data.out_folder
         chunk_idx = data.chunk_idx
@@ -207,7 +249,6 @@ class PDFProcessor(Controller):
         metadata_file = data.metadata_file
 
         result = process_pdfs_core(in_folder, out_folder, chunk_idx, num_chunks, max_pdfs, min_length, metadata_file)
-        return result
 
 def start_server():
     init_models_and_workers(workers=5)  # Initialize models and workers with a default worker count of 5
