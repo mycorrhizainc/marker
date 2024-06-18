@@ -171,7 +171,7 @@ from pydantic import BaseModel
 
 from typing import Optional
 import signal  # Add this import to handle signal
-from litestar import Request, Litestar, Controller, post  # Importing Litestar
+from litestar import Request, Litestar, Controller, Response, post  # Importing Litestar
 import traceback
 import json
 import uvicorn
@@ -181,6 +181,7 @@ import shutil
 import requests
 import sys
 
+from litestar.status_codes import HTTP_500_INTERNAL_SERVER_ERROR
 
 class BaseMarkerCliInput(BaseModel):
     in_folder: str
@@ -291,13 +292,27 @@ class PDFProcessor(Controller):
 
         result = process_pdfs_core(in_folder, out_folder, chunk_idx, num_chunks, max_pdfs, min_length, metadata_file)
 
+
+def plain_text_exception_handler(request: Request, exc: Exception) -> Response:
+    """Default handler for exceptions subclassed from HTTPException."""
+    tb = traceback.format_exc()
+    status_code = getattr(exc, "status_code", HTTP_500_INTERNAL_SERVER_ERROR)
+    detail = getattr(exc, "detail", "")
+
+    return Response(
+        media_type=MediaType.TEXT,
+        content=tb,
+        status_code=status_code,
+    )
+
 def start_server():
     init_models_and_workers(workers=5)  # Initialize models and workers with a default worker count of 5
     port = os.environ.get("MARKER_PORT")
     if port is None:
         port = 2718
     app = Litestar(
-        route_handlers = [PDFProcessor]
+        route_handlers = [PDFProcessor],
+        exception_handlers={Exception: plain_text_exception_handler},
     )
 
     run_config = uvicorn.Config(app, port=port, host="0.0.0.0")
