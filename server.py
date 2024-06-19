@@ -289,7 +289,7 @@ class PDFProcessor(Controller):
         # Save the PDF to the output directory
         pdf_filename = input_directory / Path(rand_string() + ".pdf")
         with open(pdf_filename, "wb") as f:
-            f.write(pdf_binary)
+            f.write(pdf_binary.read())
         return await self.process_pdf_from_given_docdir(doc_dir)
 
 
