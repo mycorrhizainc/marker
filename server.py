@@ -184,23 +184,23 @@ TMP_DIR = Path("/tmp")
 MARKER_TMP_DIR = TMP_DIR / Path("marker")
 class PDFProcessor(Controller):
 
-    @get("/test_pdf_processing")
-    async def test_pdf(self, request: Request ) -> str:
-        print("This a test message")
-        print("This is a test message sent to stderr",sys.stderr)
-        doc_dir = MARKER_TMP_DIR / Path(rand_string())
-        input_directory = doc_dir / Path("in")
-        os.makedirs(input_directory, exist_ok=True)
-        return await self.process_pdf_from_given_docdir(Path(data.path))
-    @post("/process_pdf_from_file_path")
-    async def process_pdf_from_file_path(self,data : URLUpload, request: Request ) -> str:
-        print("This a test message")
-        print("This is a test message sent to stderr",sys.stderr)
-        doc_dir = MARKER_TMP_DIR / Path(rand_string())
-        input_directory = doc_dir / Path("in")
-        os.makedirs(input_directory, exist_ok=True)
-        shutil.copy(data.path, input_directory)
-        return await self.process_pdf_from_given_docdir(Path(data.path))
+    # @get("/test_pdf_processing")
+    # async def test_pdf(self, request: Request ) -> str:
+    #     print("This a test message")
+    #     print("This is a test message sent to stderr",sys.stderr)
+    #     doc_dir = MARKER_TMP_DIR / Path(rand_string())
+    #     input_directory = doc_dir / Path("in")
+    #     os.makedirs(input_directory, exist_ok=True)
+    #     return await self.process_pdf_from_given_docdir(Path(data.path))
+    # @post("/process_pdf_from_file_path")
+    # async def process_pdf_from_file_path(self,data : URLUpload, request: Request ) -> str:
+    #     print("This a test message")
+    #     print("This is a test message sent to stderr",sys.stderr)
+    #     doc_dir = MARKER_TMP_DIR / Path(rand_string())
+    #     input_directory = doc_dir / Path("in")
+    #     os.makedirs(input_directory, exist_ok=True)
+    #     shutil.copy(data.path, input_directory)
+    #     return await self.process_pdf_from_given_docdir(Path(data.path))
 
     async def process_pdf_from_given_docdir(self,doc_dir : Path) -> str:
         print(f"Called function on {doc_dir}")
@@ -268,13 +268,6 @@ class PDFProcessor(Controller):
         print(f"This a test message: {input_directory}")
         download_file(data.url,input_directory,".pdf")
         return await self.process_pdf_from_given_docdir(doc_dir)
-    @post(path="/test-upload", )
-    async def handle_file_upload(self,
-        data: Annotated[UploadFile, Body(media_type=RequestEncodingType.MULTI_PART)],
-    ) -> str:
-        content = await data.read()
-        filename = data.filename
-        return f"{filename}, {content.decode()}"
         
     @post("/process_pdf_upload", media_type=MediaType.TEXT)
     async def process_pdf_upload(self,
@@ -293,17 +286,6 @@ class PDFProcessor(Controller):
         return await self.process_pdf_from_given_docdir(doc_dir)
 
 
-    @post("/process_pdfs_raw_cli")
-    async def process_pdfs_endpoint_raw_cli(self,data: BaseMarkerCliInput) -> None:
-        in_folder = data.in_folder
-        out_folder = data.out_folder
-        chunk_idx = data.chunk_idx
-        num_chunks = data.num_chunks
-        max_pdfs = data.max_pdfs
-        min_length = data.min_length
-        metadata_file = data.metadata_file
-
-        result = process_pdfs_core(in_folder, out_folder, chunk_idx, num_chunks, max_pdfs, min_length, metadata_file)
 
 
 def plain_text_exception_handler(request: Request, exc: Exception) -> Response:
