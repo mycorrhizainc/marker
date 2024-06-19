@@ -150,7 +150,7 @@ from pydantic import BaseModel
 
 from typing import Optional
 import signal  # Add this import to handle signal
-from litestar import Request, Litestar, Controller, Response, post  # Importing Litestar
+from litestar import Request, Litestar, Controller, Response, post, get  # Importing Litestar
 import traceback
 import json
 import uvicorn
@@ -182,14 +182,13 @@ class PathUpload(BaseModel):
 TMP_DIR = Path("/tmp")
 MARKER_TMP_DIR = TMP_DIR / Path("marker")
 class PDFProcessor(Controller):
-    @post("/test_process_no_pdfs")
-    async def process_pdf_from_file_path(self,data : URLUpload, request: Request ) -> str:
+    @get("/test_pdf_processing")
+    async def test_pdf(self, request: Request ) -> str:
         print("This a test message")
         print("This is a test message sent to stderr",sys.stderr)
         doc_dir = MARKER_TMP_DIR / Path(rand_string())
         input_directory = doc_dir / Path("in")
         os.makedirs(input_directory, exist_ok=True)
-        shutil.copy(data.path, input_directory)
         return await self.process_pdf_from_given_docdir(Path(data.path))
     @post("/process_pdf_from_file_path")
     async def process_pdf_from_file_path(self,data : URLUpload, request: Request ) -> str:
@@ -244,9 +243,11 @@ class PDFProcessor(Controller):
     @post("/process_pdf_from_url")
     async def process_pdf_from_url(self,data : URLUpload ) -> str:
         print("This a test message")
-        def download_file(url: str, savedir: Path) -> Path:
+        def download_file(url: str, savedir: Path,extension : Optional[str]=None) -> Path:
+            if extension is None:
+                extension = ""
             # TODO: Use a temporary directory for downloads or archive it in some other way.
-            local_filename = savedir / Path(rand_string())
+            local_filename = savedir / Path(rand_string()+extension)
             # NOTE the stream=True parameter below
             with requests.get(url, stream=True) as r:
                 r.raise_for_status()
@@ -263,7 +264,7 @@ class PDFProcessor(Controller):
         input_directory = doc_dir / Path("in")
         os.makedirs(input_directory, exist_ok=True)
         print(f"This a test message: {input_directory}")
-        download_file(data.url,input_directory)
+        download_file(data.url,input_directory,".pdf")
         return await self.process_pdf_from_given_docdir(doc_dir)
         
     @post("/process_pdf_upload", media_type="multipart/form-data")
