@@ -75,7 +75,7 @@ def init_models_and_workers(workers):
     pool = mp.Pool(processes=total_processes, initializer=worker_init, initargs=(model_lst,))
 
 
-def process_single_pdf(filepath : Path, out_folder : Path, metadata : Optional[dict] = None, min_length : Optional[int] = None ):
+def process_single_pdf(filepath : Path, out_folder : Path, metadata : Optional[dict] = None, min_length : Optional[int] = None ) -> Optional[str]:
     string_filepath=str(filepath)
     fname = os.path.basename(filepath)
     if markdown_exists(out_folder, fname):
@@ -84,15 +84,16 @@ def process_single_pdf(filepath : Path, out_folder : Path, metadata : Optional[d
         if min_length:
             filetype = find_filetype(string_filepath)
             if filetype == "other":
-                return 0
+                return None
 
             length = get_length_of_text(string_filepath)
             if length < min_length:
                 return
-
+        global model_refs
         full_text, images, out_metadata = convert_single_pdf(string_filepath, model_refs, metadata=metadata)
         if len(full_text.strip()) > 0:
             save_markdown(out_folder, fname, full_text, images, out_metadata)
+            return full_text
         else:
             print(f"Empty file: {filepath}. Could not convert.")
     except Exception as e:
@@ -216,7 +217,12 @@ class PDFProcessor(Controller):
                 raise ValueError("Path is not a directory")
             return [f for f in pdf_path.iterdir() if f.is_file() and f.suffix == '.pdf']
         print("trying to locate pdf file")
-        first_pdf_filepath = get_pdf_files(input_directory)[0]
+        pdf_list = get_pdf_files(input_directory)
+        if len(pdf_list) == 0 :
+            print(f"No PDF's found in input directory : {input_directory}")
+            print(f"{input_directory.iterdir()}")
+            return ""
+        first_pdf_filepath = pdf_list[0]
         print(f"found pdf at: {first_pdf_filepath}")
         process_single_pdf(first_pdf_filepath,output_directory)
         
