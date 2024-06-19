@@ -17,9 +17,13 @@ from marker.logger import configure_logging
 from typing import Optional
 from pathlib import Path
 
-import multiprocessing as mp
-
-mp.set_start_method('spawn')
+try:
+    mp.set_start_method('spawn')
+except RuntimeError as e:
+    if 'context has already been set' in str(e):
+        pass  # Ignore the error if the context has already been set
+    else:
+        raise
 os.environ["IN_STREAMLIT"] = "true"  # Avoid multiprocessing inside surya
 os.environ["PDFTEXT_CPU_WORKERS"] = "1"  # Avoid multiprocessing inside pdftext
 
@@ -62,7 +66,7 @@ def init_models_and_workers(workers):
         total_processes = int(min(tasks_per_gpu, total_processes))
 
     try:
-        assert True
+        mp.set_start_method('spawn')
     except RuntimeError as e:
         if 'context has already been set' in str(e):
             pass  # Ignore the error if the context has already been set
