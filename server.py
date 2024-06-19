@@ -229,7 +229,7 @@ class PDFProcessor(Controller):
         # Read the output markdown file
         # TODO : Fix at some point with tests
         def pdf_to_md_path(pdf_path: Path) -> Path:
-            return pdf_path.with_suffix('.md').parent / Path(f'out/{pdf_path.stem}/{pdf_path.stem}.md')
+            return (pdf_path.parent).parent / Path(f'out/{pdf_path.stem}/{pdf_path.stem}.md')
         output_filename = pdf_to_md_path(first_pdf_filepath)
         if not os.path.exists(output_filename):
             return f"Output markdown file not found at : {output_filename}"
