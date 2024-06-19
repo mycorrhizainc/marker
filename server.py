@@ -150,7 +150,7 @@ from pydantic import BaseModel
 
 from typing import Optional
 import signal  # Add this import to handle signal
-from litestar import Request, Litestar, Controller, Response, post, get  # Importing Litestar
+from litestar import MediaType, Request, Litestar, Controller, Response, post, get  # Importing Litestar
 import traceback
 import json
 import uvicorn
@@ -229,10 +229,10 @@ class PDFProcessor(Controller):
         # Read the output markdown file
         # TODO : Fix at some point with tests
         def pdf_to_md_path(pdf_path: Path) -> Path:
-            return pdf_path.with_suffix('.md').parent / ('out/' + pdf_path.stem + '.md')
+            return pdf_path.with_suffix('.md').parent / Path(f'out/{pdf_path.stem}/{pdf_path.stem}.md')
         output_filename = pdf_to_md_path(first_pdf_filepath)
         if not os.path.exists(output_filename):
-            return Response({"error": "Output markdown file not found."}, status_code=500)
+            return f"Output markdown file not found at : {output_filename}"
         with open(output_filename, "r") as f:
             markdown_content = f.read()
         # Cleanup directories
