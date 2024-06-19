@@ -39,29 +39,6 @@ def worker_exit():
     del model_refs
 
 
-def process_single_pdf(filepath : Path, out_folder : Path, metadata : Optional[dict], min_length : Optional[int] ):
-    string_filepath=str(filepath)
-    fname = os.path.basename(filepath)
-    if markdown_exists(out_folder, fname):
-        return
-    try:
-        if min_length:
-            filetype = find_filetype(string_filepath)
-            if filetype == "other":
-                return 0
-
-            length = get_length_of_text(string_filepath)
-            if length < min_length:
-                return
-
-        full_text, images, out_metadata = convert_single_pdf(string_filepath, model_refs, metadata=metadata)
-        if len(full_text.strip()) > 0:
-            save_markdown(out_folder, fname, full_text, images, out_metadata)
-        else:
-            print(f"Empty file: {filepath}. Could not convert.")
-    except Exception as e:
-        print(f"Error converting {filepath}: {e}")
-        print(traceback.format_exc())
 
 
 def init_models_and_workers(workers):
@@ -94,6 +71,29 @@ def init_models_and_workers(workers):
     pool = mp.Pool(processes=total_processes, initializer=worker_init, initargs=(model_lst,))
 
 
+def process_single_pdf(filepath : Path, out_folder : Path, metadata : Optional[dict] = None, min_length : Optional[int] = None ):
+    string_filepath=str(filepath)
+    fname = os.path.basename(filepath)
+    if markdown_exists(out_folder, fname):
+        return
+    try:
+        if min_length:
+            filetype = find_filetype(string_filepath)
+            if filetype == "other":
+                return 0
+
+            length = get_length_of_text(string_filepath)
+            if length < min_length:
+                return
+
+        full_text, images, out_metadata = convert_single_pdf(string_filepath, model_refs, metadata=metadata)
+        if len(full_text.strip()) > 0:
+            save_markdown(out_folder, fname, full_text, images, out_metadata)
+        else:
+            print(f"Empty file: {filepath}. Could not convert.")
+    except Exception as e:
+        print(f"Error converting {filepath}: {e}")
+        print(traceback.format_exc())
 
 def process_pdfs_core_server(in_folder : Path, out_folder : Path , chunk_idx : int , num_chunks : int, max_pdfs : int, min_length : Optional[int] , metadata_file : Optional[Path]):
     print(f"called pdf processing core")
@@ -205,15 +205,23 @@ class PDFProcessor(Controller):
         os.makedirs(input_directory, exist_ok=True)
 
         os.makedirs(output_directory, exist_ok=True)
-        print("Input and output dirs created")
-        # Process the PDF
-        result = process_pdfs_core_server(input_directory, output_directory, chunk_idx=0, num_chunks=1, max_pdfs=1, min_length=None, metadata_file=None)
-        print(result)
-        assert result.get("status") == "success", str(result)
 
+
+        def get_pdf_files(pdf_path: Path) -> list[Path]:
+            if not pdf_path.is_dir():
+                raise ValueError("Path is not a directory")
+            return [f for f in pdf_path.iterdir() if f.is_file() and f.suffix == '.pdf']
+        print("trying to locate pdf file")
+        first_pdf_filepath = get_pdf_files(input_directory)[0]
+        print(f"found pdf at: {first_pdf_filepath}")
+        process_single_pdf(first_pdf_filepath,output_directory)
+        
+        print("Successfully processed pdf.")
         # Read the output markdown file
         # TODO : Fix at some point with tests
-        output_filename = os.path.join(out_folder, pdf_file.filename.replace(".pdf", ".md"))
+        def pdf_to_md_path(pdf_path: Path) -> Path:
+            return pdf_path.with_suffix('.md').parent / ('out/' + pdf_path.stem + '.md')
+        output_filename = pdf_to_md_path(first_pdf_filepath)
         if not os.path.exists(output_filename):
             return Response({"error": "Output markdown file not found."}, status_code=500)
         with open(output_filename, "r") as f:
